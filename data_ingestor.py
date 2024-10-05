@@ -2,9 +2,19 @@ import pandas as pd
 import glob
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.feature_selection import mutual_info_regression
-from sklearn.impute import SimpleImputer
+from sklearn.impute import KNNImputer
 import numpy as np
 
+
+def restricted_backfill(series, window=3):
+    for i in range(len(series)):
+        if pd.isna(series.iloc[i]):
+            window_values = series[max(0, i - window):i].bfill()
+
+            if not window_values.empty and pd.notna(window_values.iloc[0]):
+                series.iloc[i] = window_values.iloc[0]
+
+    return series
 
 def fetch_data_as_df():
     energy_data = pd.read_csv("data/power_consumption.csv", parse_dates={'datetime': ['Date', 'Time']},
@@ -53,12 +63,20 @@ def fetch_data_as_df():
     combined_data = pd.merge(left=energy_data_hourly, right=weather_data, left_index=True, right_index=True,
                              how="inner")
 
-    my_imputer = SimpleImputer()
-    combined_data_imputed = pd.DataFrame(my_imputer.fit_transform(combined_data),
-                                         columns=combined_data.columns,
+    combined_data_imputed = combined_data.copy()
+
+    for column in combined_data.columns:
+        combined_data_imputed[column] = restricted_backfill(combined_data[column], 2)
+
+    # my_imputer = SimpleImputer()
+    # combined_data_imputed = pd.DataFrame(my_imputer.fit_transform(combined_data),
+    #                                      columns=combined_data.columns,
+    #                                      index=combined_data.index)
+
+    knn_imputer = KNNImputer(n_neighbors=5)
+    combined_data_imputed = pd.DataFrame(knn_imputer.fit_transform(combined_data), columns=combined_data.columns,
                                          index=combined_data.index)
 
-    combined_data_imputed["data_aggr"] = combined_data_imputed['Hour'] + combined_data_imputed['DayOfWeek'] + combined_data_imputed['Month']
     return combined_data_imputed
 
 def get_mutual_info(data):
@@ -67,7 +85,6 @@ def get_mutual_info(data):
     mi_scores = mutual_info_regression(X, y)
     mi_scores = pd.Series(mi_scores, name="MI Scores", index=X.columns)
     mi_scores = mi_scores.sort_values(ascending=False)
-    print(mi_scores)
 
 def scale_features(data):
     data_np = data.values
@@ -77,11 +94,3 @@ def scale_features(data):
 
     scaler = MinMaxScaler()
     scaled_features = scaler.fit_transform(features)
-
-
-def get_data():
-    df = fetch_data_as_df()
-    get_mutual_info(df)
-
-
-get_data()
