@@ -86,11 +86,9 @@ def get_mutual_info(data):
     mi_scores = pd.Series(mi_scores, name="MI Scores", index=X.columns)
     mi_scores = mi_scores.sort_values(ascending=False)
 
-def scale_features(data):
-    data_np = data.values
+    print(mi_scores)
 
-    features = data_np[:, 1:]
-    target = data_np[:, 0]
-
+def scale_features(features):
     scaler = MinMaxScaler()
     scaled_features = scaler.fit_transform(features)
+    return scaled_features
